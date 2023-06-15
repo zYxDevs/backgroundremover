@@ -46,7 +46,9 @@ class Net(torch.nn.Module):
             net = u2net.U2NETP(3, 1)
             path = os.environ.get(
                 "U2NETP_PATH",
-                os.path.expanduser(os.path.join("~", ".u2net", model_name + ".pth")),
+                os.path.expanduser(
+                    os.path.join("~", ".u2net", f"{model_name}.pth")
+                ),
             )
             if (
                 not os.path.exists(path)
@@ -55,11 +57,13 @@ class Net(torch.nn.Module):
                     path, model_name
                 )
 
-        elif model_name == "u2net":
+        elif model_name in ["u2net", "u2net_human_seg"]:
             net = u2net.U2NET(3, 1)
             path = os.environ.get(
                 "U2NET_PATH",
-                os.path.expanduser(os.path.join("~", ".u2net", model_name + ".pth")),
+                os.path.expanduser(
+                    os.path.join("~", ".u2net", f"{model_name}.pth")
+                ),
             )
             if (
                 not os.path.exists(path)
@@ -69,19 +73,6 @@ class Net(torch.nn.Module):
                     path, model_name
                 )
 
-        elif model_name == "u2net_human_seg":
-            net = u2net.U2NET(3, 1)
-            path = os.environ.get(
-                "U2NET_PATH",
-                os.path.expanduser(os.path.join("~", ".u2net", model_name + ".pth")),
-            )
-            if (
-                not os.path.exists(path)
-                #or hasher.md5(path) != "347c3d51b01528e5c6c071e3cff1cb55"
-            ):
-                utilities.download_files_from_github(
-                    path, model_name
-                )
         else:
             print("Choose between u2net, u2net_human_seg or u2netp", file=sys.stderr)
 
@@ -101,8 +92,9 @@ class Net(torch.nn.Module):
         out = (out - mi) / (ma - mi) * 255
         out = torch.nn.functional.interpolate(out, original_shape, mode='bilinear')
         out = out[:, 0]
-        out = out.to(dtype=torch.uint8, device=torch.device('cpu'), non_blocking=True).detach()
-        return out
+        return out.to(
+            dtype=torch.uint8, device=torch.device('cpu'), non_blocking=True
+        ).detach()
 
 
 def alpha_matting_cutout(
@@ -158,8 +150,7 @@ def alpha_matting_cutout(
 
 def naive_cutout(img, mask):
     empty = Image.new("RGBA", (img.size), 0)
-    cutout = Image.composite(img, empty, mask.resize(img.size, Image.LANCZOS))
-    return cutout
+    return Image.composite(img, empty, mask.resize(img.size, Image.LANCZOS))
 
 
 def get_model(model_name):

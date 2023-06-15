@@ -28,25 +28,13 @@ def load_model(model_name: str = "u2net"):
                             'U2NET_PATH')
     }[model_name]
 
-    if model_name == "u2netp":
-        net = u2net.U2NETP(3, 1)
-        path = os.environ.get(
-            "U2NETP_PATH",
-            os.path.expanduser(os.path.join("~", ".u2net", model_name + ".pth")),
-        )
-        if (
-            not os.path.exists(path)
-            #or hasher.md5(path) != "e4f636406ca4e2af789941e7f139ee2e"
-        ):
-            utilities.download_files_from_github(
-                path, model_name
-            )
-
-    elif model_name == "u2net":
+    if model_name in {"u2net", "u2net_human_seg"}:
         net = u2net.U2NET(3, 1)
         path = os.environ.get(
             "U2NET_PATH",
-            os.path.expanduser(os.path.join("~", ".u2net", model_name + ".pth")),
+            os.path.expanduser(
+                os.path.join("~", ".u2net", f"{model_name}.pth")
+            ),
         )
         if (
             not os.path.exists(path)
@@ -56,15 +44,17 @@ def load_model(model_name: str = "u2net"):
                 path, model_name
             )
 
-    elif model_name == "u2net_human_seg":
-        net = u2net.U2NET(3, 1)
+    elif model_name == "u2netp":
+        net = u2net.U2NETP(3, 1)
         path = os.environ.get(
-            "U2NET_PATH",
-            os.path.expanduser(os.path.join("~", ".u2net", model_name + ".pth")),
+            "U2NETP_PATH",
+            os.path.expanduser(
+                os.path.join("~", ".u2net", f"{model_name}.pth")
+            ),
         )
         if (
             not os.path.exists(path)
-            #or hasher.md5(path) != "347c3d51b01528e5c6c071e3cff1cb55"
+            #or hasher.md5(path) != "e4f636406ca4e2af789941e7f139ee2e"
         ):
             utilities.download_files_from_github(
                 path, model_name
@@ -86,7 +76,7 @@ def load_model(model_name: str = "u2net"):
             )
     except FileNotFoundError:
         raise FileNotFoundError(
-            errno.ENOENT, os.strerror(errno.ENOENT), model_name + ".pth"
+            errno.ENOENT, os.strerror(errno.ENOENT), f"{model_name}.pth"
         )
 
     net.eval()
@@ -97,32 +87,28 @@ def load_model(model_name: str = "u2net"):
 def norm_pred(d):
     ma = torch.max(d)
     mi = torch.min(d)
-    dn = (d - mi) / (ma - mi)
-
-    return dn
+    return (d - mi) / (ma - mi)
 
 
 def preprocess(image):
     label_3 = np.zeros(image.shape)
-    label = np.zeros(label_3.shape[0:2])
+    label = np.zeros(label_3.shape[:2])
 
-    if 3 == len(label_3.shape):
+    if len(label_3.shape) == 3:
         label = label_3[:, :, 0]
-    elif 2 == len(label_3.shape):
+    elif len(label_3.shape) == 2:
         label = label_3
 
-    if 3 == len(image.shape) and 2 == len(label.shape):
+    if len(image.shape) == 3 and len(label.shape) == 2:
         label = label[:, :, np.newaxis]
-    elif 2 == len(image.shape) and 2 == len(label.shape):
+    elif len(image.shape) == 2 == len(label.shape):
         image = image[:, :, np.newaxis]
         label = label[:, :, np.newaxis]
 
     transform = transforms.Compose(
         [data_loader.RescaleT(320), data_loader.ToTensorLab(flag=0)]
     )
-    sample = transform({"imidx": np.array([0]), "image": image, "label": label})
-
-    return sample
+    return transform({"imidx": np.array([0]), "image": image, "label": label})
 
 
 def predict(net, item):
