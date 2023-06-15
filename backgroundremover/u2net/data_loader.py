@@ -120,11 +120,7 @@ class ToTensor(object):
         tmpLbl = np.zeros(label.shape)
 
         image = image / np.max(image)
-        if np.max(label) < 1e-6:
-            label = label
-        else:
-            label = label / np.max(label)
-
+        label = label if np.max(label) < 1e-6 else label / np.max(label)
         if image.shape[2] == 1:
             tmpImg[:, :, 0] = (image[:, :, 0] - 0.485) / 0.229
             tmpImg[:, :, 1] = (image[:, :, 0] - 0.485) / 0.229
@@ -160,11 +156,7 @@ class ToTensorLab(object):
 
         tmpLbl = np.zeros(label.shape)
 
-        if np.max(label) < 1e-6:
-            label = label
-        else:
-            label = label / np.max(label)
-
+        label = label if np.max(label) < 1e-6 else label / np.max(label)
         # change the color space
         if self.flag == 2:  # with rgb and Lab colors
             tmpImg = np.zeros((image.shape[0], image.shape[1], 6))
@@ -299,20 +291,20 @@ class SalObjDataset(Dataset):
         imname = self.image_name_list[idx]
         imidx = np.array([idx])
 
-        if 0 == len(self.label_name_list):
+        if len(self.label_name_list) == 0:
             label_3 = np.zeros(image.shape)
         else:
             label_3 = io.imread(self.label_name_list[idx])
 
-        label = np.zeros(label_3.shape[0:2])
-        if 3 == len(label_3.shape):
+        label = np.zeros(label_3.shape[:2])
+        if len(label_3.shape) == 3:
             label = label_3[:, :, 0]
-        elif 2 == len(label_3.shape):
+        elif len(label_3.shape) == 2:
             label = label_3
 
-        if 3 == len(image.shape) and 2 == len(label.shape):
+        if len(image.shape) == 3 and len(label.shape) == 2:
             label = label[:, :, np.newaxis]
-        elif 2 == len(image.shape) and 2 == len(label.shape):
+        elif len(image.shape) == 2 == len(label.shape):
             image = image[:, :, np.newaxis]
             label = label[:, :, np.newaxis]
 

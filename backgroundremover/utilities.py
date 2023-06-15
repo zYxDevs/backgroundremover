@@ -184,8 +184,7 @@ def transparentgif(output, file_path,
               frame_limit,
               prefetched_batches,
               framerate)
-    cmd = "nice -10 ffmpeg -y -i '%s' -i '%s' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1,fps=10,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse' -shortest '%s'" % (
-        file_path, temp_file, output)
+    cmd = f"nice -10 ffmpeg -y -i '{file_path}' -i '{temp_file}' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1,fps=10,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse' -shortest '{output}'"
     sp.run(shlex.split(cmd))
     print("Process finished")
 
@@ -210,8 +209,7 @@ def transparentgifwithbackground(output, overlay, file_path,
               prefetched_batches,
               framerate)
     print("Starting alphamerge")
-    cmd = "nice -10 ffmpeg -y -i '%s' -i '%s' -i '%s' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1[fg];[2][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto,fps=10,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse' -shortest '%s'" % (
-        file_path, temp_file, overlay, output)
+    cmd = f"nice -10 ffmpeg -y -i '{file_path}' -i '{temp_file}' -i '{overlay}' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1[fg];[2][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto,fps=10,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse' -shortest '{output}'"
     sp.run(shlex.split(cmd))
     print("Process finished")
     try:
@@ -239,14 +237,13 @@ def transparentvideo(output, file_path,
               prefetched_batches,
               framerate)
     print("Starting alphamerge")
-    cmd = "nice -10 ffmpeg -y -nostats -loglevel 0 -i '%s' -i '%s' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1' -c:v qtrle -shortest '%s'" % (
-        file_path, temp_file, output)
+    cmd = f"nice -10 ffmpeg -y -nostats -loglevel 0 -i '{file_path}' -i '{temp_file}' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1' -c:v qtrle -shortest '{output}'"
     process = sp.Popen(cmd, shell=True, stdout=sp.PIPE, stderr=sp.PIPE)
     stdout, stderr = process.communicate()
     print('after call')
 
     if stderr:
-        return "ERROR: %s" % stderr.decode("utf-8")
+        return f'ERROR: {stderr.decode("utf-8")}'
     print("Process finished")
     try:
         temp_dir.cleanup()
@@ -273,8 +270,7 @@ def transparentvideoovervideo(output, overlay, file_path,
               prefetched_batches,
               framerate)
     print("Starting alphamerge")
-    cmd = "nice -10 ffmpeg -y -i '%s' -i '%s' -i '%s' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1[vid];[vid][2:v]scale2ref[fg][bg];[bg][fg]overlay=shortest=1[out]' -map [out] -shortest '%s'" % (
-        file_path, temp_file, overlay, output)
+    cmd = f"nice -10 ffmpeg -y -i '{file_path}' -i '{temp_file}' -i '{overlay}' -filter_complex '[1][0]scale2ref[mask][main];[main][mask]alphamerge=shortest=1[vid];[vid][2:v]scale2ref[fg][bg];[bg][fg]overlay=shortest=1[out]' -map [out] -shortest '{output}'"
     sp.run(shlex.split(cmd))
     print("Process finished")
     try:
@@ -302,13 +298,11 @@ def transparentvideooverimage(output, overlay, file_path,
               prefetched_batches,
               framerate)
     print("Scale image")
-    temp_image = os.path.abspath("%s/new.jpg" % tmpdirname)
-    cmd = "nice -10 ffmpeg -i '%s' -i '%s' -filter_complex 'scale2ref[img][vid];[img]setsar=1;[vid]nullsink' -q:v 2 '%s'" % (
-        overlay, file_path, temp_image)
+    temp_image = os.path.abspath(f"{tmpdirname}/new.jpg")
+    cmd = f"nice -10 ffmpeg -i '{overlay}' -i '{file_path}' -filter_complex 'scale2ref[img][vid];[img]setsar=1;[vid]nullsink' -q:v 2 '{temp_image}'"
     sp.run(shlex.split(cmd))
     print("Starting alphamerge")
-    cmd = "nice -10 ffmpeg -y -i '%s' -i '%s' -i '%s' -filter_complex '[0:v]scale2ref=oh*mdar:ih[bg];[1:v]scale2ref=oh*mdar:ih[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1[out]' -map [out] -shortest '%s'" % (
-        temp_image, file_path, temp_file, output)
+    cmd = f"nice -10 ffmpeg -y -i '{temp_image}' -i '{file_path}' -i '{temp_file}' -filter_complex '[0:v]scale2ref=oh*mdar:ih[bg];[1:v]scale2ref=oh*mdar:ih[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1[out]' -map [out] -shortest '{output}'"
     sp.run(shlex.split(cmd))
     print("Process finished")
     try:
