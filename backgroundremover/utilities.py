@@ -74,7 +74,17 @@ def worker(worker_nodes,
         # are we processing frames faster than the frame ripper is saving them?
         last = fi[-1]
         while last not in frames_dict:
+            # The ripper can yield fewer frames than ffprobe's packet count
+            # predicted; once it reports the real total, stop waiting for
+            # frames that will never arrive.
+            if "total" in frames_dict and last >= frames_dict["total"]:
+                break
             time.sleep(0.1)
+
+        if "total" in frames_dict:
+            fi = [index for index in fi if index < frames_dict["total"]]
+            if not fi:
+                break
 
         input_frames = [frames_dict[index] for index in fi]
         if script_net is None:
@@ -91,12 +101,16 @@ def worker(worker_nodes,
 
 def capture_frames(file_path, frames_dict, prefetched_samples, total_frames):
     print(F"WORKER FRAMERIPPER ONLINE")
+    idx = -1
     for idx, frame in enumerate(iter_frames(file_path)):
         frames_dict[idx] = frame
         while len(frames_dict) > prefetched_samples:
             time.sleep(0.1)
         if idx > total_frames:
             break
+    # Publish the real frame count so workers don't hang waiting for frames
+    # the decoder never produced (packet count can overestimate).
+    frames_dict["total"] = idx + 1
 
 
 def matte_key(output, file_path,
@@ -136,6 +150,23 @@ def matte_key(output, file_path,
     if not video_stream:
         raise Exception("Could not find video stream")
 
+    # Source resolution for the output matte. Frames are downscaled to height
+    # 320 for inference (see bg.iter_frames), so upscale the mask back to the
+    # source size when encoding (issue #185). Rotation metadata swaps the axes.
+    source_size = None
+    try:
+        src_w = int(video_stream["width"])
+        src_h = int(video_stream["height"])
+        rotation = int(video_stream.get("tags", {}).get("rotate", 0))
+        for side_data in video_stream.get("side_data_list", []) or []:
+            if "rotation" in side_data:
+                rotation = int(side_data["rotation"])
+        if abs(rotation) % 180 == 90:
+            src_w, src_h = src_h, src_w
+        source_size = (src_w, src_h)
+    except (KeyError, TypeError, ValueError):
+        pass
+
     frame_rate_str = video_stream.get("r_frame_rate", "0/0")
     if frame_rate_str == "0/0":
         raise Exception("Could not detect framerate of video")
@@ -166,6 +197,7 @@ def matte_key(output, file_path,
     command = None
     proc = None
     frame_counter = 0
+    finished_early = False
     for i in range(math.ceil(total_frames / worker_nodes)):
         for wx in range(worker_nodes):
 
@@ -180,7 +212,16 @@ def matte_key(output, file_path,
                     if timeout_counter % 100 == 0:
                         dead_workers = [w for w in workers if not w.is_alive()]
                         if dead_workers and hash_index not in results_dict:
-                            raise RuntimeError(f"Worker process crashed while waiting for frame batch {hash_index}. Try reducing worker count with -wn 1")
+                            crashed = [w for w in dead_workers if w.exitcode not in (0, None)]
+                            if crashed:
+                                raise RuntimeError(f"Worker process crashed while waiting for frame batch {hash_index}. Try reducing worker count with -wn 1")
+                            if len(dead_workers) == len(workers):
+                                # All workers exited cleanly: the source had
+                                # fewer frames than the packet count suggested.
+                                finished_early = True
+                                break
+                if finished_early:
+                    break
 
                 frames = results_dict[hash_index]
             except (ConnectionResetError, BrokenPipeError) as e:
@@ -203,14 +244,16 @@ def matte_key(output, file_path,
                                '-y',
                                '-f', 'rawvideo',
                                '-vcodec', 'rawvideo',
-                               '-s', F"{frame.shape[1]}x320",
+                               '-s', F"{frame.shape[1]}x{frame.shape[0]}",
                                '-pix_fmt', 'gray',
                                '-r', framerate_str,
                                '-i', '-',
-                               '-an',
-                               '-vcodec', 'mpeg4',
-                               '-b:v', '2000k',
-                               '%s' % output]
+                               '-an']
+                    if source_size and source_size != (frame.shape[1], frame.shape[0]):
+                        command += ['-vf', F"scale={source_size[0]}:{source_size[1]}:flags=bicubic"]
+                    command += ['-vcodec', 'mpeg4',
+                                '-qscale:v', '3',
+                                '%s' % output]
 
                     proc = sp.Popen(command, stdin=sp.PIPE)
 
@@ -225,12 +268,16 @@ def matte_key(output, file_path,
                     proc.wait()
                     print(F"FINISHED ALL FRAMES ({total_frames})!")
                     return
+        if finished_early:
+            break
 
     p.join()
     for w in workers:
         w.join()
-    proc.stdin.close()
-    proc.wait()
+    if proc is not None:
+        proc.stdin.close()
+        proc.wait()
+    print(F"FINISHED ALL FRAMES ({frame_counter})!")
     return
 
 

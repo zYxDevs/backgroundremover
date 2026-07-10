@@ -381,6 +381,7 @@ def main():
                 only_mask=args.only_mask,
                 background_color=background_color,
                 background_image=background_image,
+                mask_threshold=args.mask_threshold,
             ),
         )
         return
@@ -455,6 +456,7 @@ def main():
                 only_mask=args.only_mask,
                 background_color=background_color,
                 background_image=background_image,
+                mask_threshold=args.mask_threshold,
             ),
         )
     else:
